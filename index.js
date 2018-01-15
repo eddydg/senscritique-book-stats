@@ -43,10 +43,16 @@ var inline_src = (<><![CDATA[
                     const details = [...dom2.querySelectorAll('#detail_bullets_id .bucket .content')].map(b => b.innerText)[0];
                     const matchedPagesStr = details.match(/[0-9]{2,4}(?= pages)/g)[0];
                     const matchedPages = parseInt(matchedPagesStr);
-                    const readingMinutes = wpmSpeed / matchedPages;
+                    const readingMinutes = matchedPages * wordsByPage / wpmSpeed;
 
-                    console.log(matchedPages + ' pages');
-                    console.log(prettifyMinutes(readingMinutes));
+                    const bookDetailsUl = document.querySelector('.pvi-productDetails ul');
+                    const additionalDetailsLi = document.createElement("li");
+                    additionalDetailsLi.className = 'pvi-productDetails-item';
+                    const titleSpan = document.createElement('span');
+                    titleSpan.title = 'Pour une vitesse moyenne de 300 mots/minute';
+                    titleSpan.innerText = `${matchedPages} pages (${prettifyMinutes(readingMinutes)})`;
+                    additionalDetailsLi.appendChild(titleSpan);
+                    bookDetailsUl.appendChild(additionalDetailsLi);
                 }
             });
         }
