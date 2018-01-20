@@ -31,42 +31,77 @@ var inline_src = (<><![CDATA[
     const escapedBookTitle = escape(document.querySelector('.pvi-product-title').innerText.trim());
     const amazonUrl = amazonBaseUrl + escapedBookTitle;
 
-    const insertBookStats = (matchedPages, readingMinutes) => {
-        const bookDetailsUl = document.querySelector('.pvi-productDetails ul');
-        const additionalDetailsLi = document.createElement("li");
-        additionalDetailsLi.className = 'pvi-productDetails-item';
+    const getBookStatsLi = (matchedPages, readingMinutes) => {
         const titleSpan = document.createElement('span');
         titleSpan.title = 'Pour une vitesse moyenne de 300 mots/minute';
         titleSpan.innerText = `${matchedPages} pages (${prettifyMinutes(readingMinutes)})`;
-        additionalDetailsLi.appendChild(titleSpan);
-        bookDetailsUl.appendChild(additionalDetailsLi);
+
+        return getAdditionalStatsLi(titleSpan);
+    };
+
+    const insertMessage = (text = '') => {
+        const span = document.createElement('span');
+        span.innerText = text;
+        const messageLi = getAdditionalStatsLi(span);
+        insertAdditionalStats(messageLi);
+    };
+
+    const getAdditionalStatsLi = (child) => {
+        const additionalDetailsLi = document.createElement("li");
+        additionalDetailsLi.className = 'pvi-productDetails-item';
+        additionalDetailsLi.appendChild(child);
+        additionalDetailsLi.id = 'book-stats';
+        return additionalDetailsLi;
+    };
+
+    const insertAdditionalStats = (additionalDetailsLi) => {
+        const previousLi = document.querySelector('#book-stats');
+        if (previousLi) {
+            previousLi.replaceWith(additionalDetailsLi);
+        } else {
+            const bookDetailsUl = document.querySelector('.pvi-productDetails ul');
+            bookDetailsUl.appendChild(additionalDetailsLi);
+        }
     };
 
     const cache = JSON.parse(GM_getValue(CACHE_NAME) || null);
     if (cache && escapedBookTitle in cache) {
         const { matchedPages, readingMinutes } = cache[escapedBookTitle];
-        insertBookStats(matchedPages, readingMinutes);
+        const additionalDetailsLi = getBookStatsLi(matchedPages, readingMinutes);
+        insertAdditionalStats(additionalDetailsLi);
     } else {
+        insertMessage('...');
+
         GM_xmlhttpRequest({
             method: "GET",
             url: amazonUrl,
             fetch: true,
-            onreadystatechange: state => {
-                const dom = domParser.parseFromString(state.responseText, "text/html");
-                const firstResultUrl = dom.querySelectorAll('.s-access-detail-page')[0].href;
+            onreadystatechange: resultPageState => {
+                const dom = domParser.parseFromString(resultPageState.responseText, "text/html");
+                const firstResult = dom.querySelectorAll('.s-access-detail-page')[0];
+                if (!firstResult) {
+                    insertMessage('Not found on Amazon');
+                    return;
+                }
 
+                const firstResultUrl = firstResult.href;
                 GM_xmlhttpRequest({
                     method: "GET",
                     url: firstResultUrl,
                     fetch: true,
-                    onreadystatechange: state2 => {
-                        const dom2 = domParser.parseFromString(state2.responseText, "text/html");
+                    onreadystatechange: bookPageState => {
+                        const dom2 = domParser.parseFromString(bookPageState.responseText, "text/html");
                         const details = [...dom2.querySelectorAll('#detail_bullets_id .bucket .content')].map(b => b.innerText)[0];
-                        const matchedPagesStr = details.match(/[0-9]{2,4}(?= pages)/g)[0];
-                        const matchedPages = parseInt(matchedPagesStr);
+                        const matchedPagesStr = details.match(/[0-9]{2,4}(?= pages)/g);
+                        if (!matchedPagesStr || matchedPagesStr.length === 0) {
+                            insertMessage('Page count not found');
+                            return;
+                        }
+                        const matchedPages = parseInt(matchedPagesStr[0]);
                         const readingMinutes = matchedPages * wordsByPage / wpmSpeed;
 
-                        insertBookStats(matchedPages, readingMinutes);
+                        const additionalDetailsLi = getBookStatsLi(matchedPages, readingMinutes);
+                        insertAdditionalStats(additionalDetailsLi);
 
                         const newCache = cache || {};
                         newCache[escapedBookTitle] = { matchedPages, readingMinutes };
