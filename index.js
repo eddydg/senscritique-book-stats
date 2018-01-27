@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Book stats
 // @namespace    http://tampermonkey.net/
-// @version      1.2
+// @version      1.3
 // @description  Get a book pages number and how much time it will take to finish it
 // @author       Eddydg
 // @require      https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/6.18.2/babel.js
@@ -55,6 +55,43 @@ var inline_src = (<><![CDATA[
           return;
         }
         const matchedPages = parseInt(matchedPagesStr[0]);
+        const readingMinutes = matchedPages * wordsByPage / wpmSpeed;
+        const additionalDetailsLi = getBookStatsLi(matchedPages, readingMinutes);
+
+        insertAdditionalStats(additionalDetailsLi);
+        updateCache(q, { matchedPages, readingMinutes });
+      };
+
+      fetchAndAction(getUrl(q), parseResults);
+    },
+
+    fnac: function(q) {
+      const getUrl = (q) => (
+        `http://www.fnac.com//r/${q}?SCat=2!1`
+      );
+
+      const parseResults = (dom) => {
+        const firstResult = [...dom.querySelectorAll('.Article-item .Article-desc a')].map(x => x.href)[0];
+        if (!firstResult) {
+          insertMessage('Not found on Fnac');
+          return;
+        }
+
+        fetchAndAction(firstResult, parsePageCount);
+      };
+
+      const parsePageCount = (dom) => {
+        const pageCountStr = [...dom.querySelectorAll('.whiteContent .Feature-item')]
+          .filter(x => {
+            const a = x.querySelector('.Feature-label');
+            return a && a.innerText.trim() === 'Nombre de pages';
+          })
+          .map(x => x.querySelector('.Feature-desc').innerText.trim())[0];
+        if (!pageCountStr) {
+          insertMessage('Page count not found');
+          return;
+        }
+        const matchedPages = parseInt(pageCountStr);
         const readingMinutes = matchedPages * wordsByPage / wpmSpeed;
         const additionalDetailsLi = getBookStatsLi(matchedPages, readingMinutes);
 
